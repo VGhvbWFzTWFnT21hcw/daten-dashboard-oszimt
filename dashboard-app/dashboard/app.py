@@ -1,4 +1,4 @@
-from shiny import App, reactive, ui
+from shiny import App, reactive, ui, render
 from shinywidgets import output_widget, render_widget
 import pandas as pd
 import shiny.experimental as x
@@ -7,21 +7,21 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
 import faicons
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import numpy as np
 
 # Farbschema für Energietypen
 COLORS = {
-    "renewable": "#2ECC71",  # Grün für Erneuerbare
-    "conventional": "#E74C3C",  # Rot für Konventionelle
-    "demand": "#3498DB",  # Blau für Verbrauch
-    "solar": "#F1C40F",  # Gelb für Solar
-    "wind": "#1ABC9C",  # Türkis für Wind
-    "hydro": "#5DADE2",  # Hellblau für Wasser
-    "biomass": "#27AE60",  # Dunkelgrün für Biomasse
-    "coal": "#7F8C8D",  # Grau für Kohle
-    "gas": "#E67E22",  # Orange für Gas
-    "nuclear": "#9B59B6",  # Lila für Kernkraft
+    "renewable": "#2ECC71",
+    "conventional": "#E74C3C",
+    "demand": "#3498DB",
+    "solar": "#F1C40F",
+    "wind": "#1ABC9C",
+    "hydro": "#5DADE2",
+    "biomass": "#27AE60",
+    "coal": "#7F8C8D",
+    "gas": "#E67E22",
+    "nuclear": "#9B59B6",
 }
 
 RENEWABLE_COLS = [
@@ -46,7 +46,6 @@ def read_energy_data():
     df["month"] = df["timestamp"].dt.month
     df["weekday"] = df["timestamp"].dt.weekday
 
-    # Berechne erneuerbare und konventionelle Summen
     df["renewable_mw"] = df[RENEWABLE_COLS].sum(axis=1)
     df["conventional_mw"] = df[CONVENTIONAL_COLS].sum(axis=1)
     df["renewable_share"] = (df["renewable_mw"] / df["total_generation_mw"] * 100).round(1)
@@ -73,10 +72,17 @@ def get_background_color(mode):
     return "white" if mode == "light" else "rgb(29, 32, 33)"
 
 
+# Lade Daten beim Start
+df_energy_full = read_energy_data()
+df_sunshine_full = read_sunshine_data()
+
+# Ermittle Datumsbereich aus Daten
+min_date = df_energy_full["date"].min()
+max_date = df_energy_full["date"].max()
+
 # UI Definition
 app_ui = ui.page_fillable(
     ui.page_navbar(
-        # Tab 1: Übersicht
         ui.nav_panel(
             "Übersicht",
             ui.row(
@@ -127,7 +133,6 @@ app_ui = ui.page_fillable(
                 ),
             ),
         ),
-        # Tab 2: Zeitreihen
         ui.nav_panel(
             "Zeitreihen",
             ui.row(
@@ -151,7 +156,6 @@ app_ui = ui.page_fillable(
                 ),
             ),
         ),
-        # Tab 3: Tagesprofile
         ui.nav_panel(
             "Tagesprofile",
             ui.row(
@@ -177,7 +181,6 @@ app_ui = ui.page_fillable(
                 ),
             ),
         ),
-        # Tab 4: Prognose
         ui.nav_panel(
             "Prognose",
             ui.row(
@@ -206,8 +209,10 @@ app_ui = ui.page_fillable(
             ui.input_date_range(
                 id="date_range",
                 label="Zeitraum auswählen",
-                start="2025-01-01",
-                end="2025-12-26",
+                start=min_date,
+                end=max_date,
+                min=min_date,
+                max=max_date,
                 language="de",
             ),
             ui.input_dark_mode(id="dark_mode", mode="light"),
@@ -230,58 +235,59 @@ app_ui = ui.page_fillable(
 
 def server(input, output, session):
 
-    # Lade Daten
-    df_energy_full = read_energy_data()
-    df_sunshine_full = read_sunshine_data()
-
     @reactive.Calc
     def filtered_energy():
-        """Filtere Daten nach Datumsbereich"""
         start, end = input.date_range()
         mask = (df_energy_full["date"] >= start) & (df_energy_full["date"] <= end)
         return df_energy_full[mask]
 
     @reactive.Calc
     def filtered_sunshine():
-        """Filtere Sonnenscheindaten nach Datumsbereich"""
         start, end = input.date_range()
         mask = (df_sunshine_full["date"] >= start) & (df_sunshine_full["date"] <= end)
         return df_sunshine_full[mask]
 
-    # KPIs
-    @output
-    @reactive.event(input.date_range)
+    # KPIs mit @render.text
+    @render.text
     def kpi_avg_generation():
         df = filtered_energy()
-        daily = df.groupby("date")["total_generation_mw"].sum() / 4 / 1000  # MWh zu GWh
+        if df.empty:
+            return "-- GWh"
+        daily = df.groupby("date")["total_generation_mw"].sum() / 4 / 1000
         return f"{daily.mean():.1f} GWh"
 
-    @output
-    @reactive.event(input.date_range)
+    @render.text
     def kpi_renewable_share():
         df = filtered_energy()
+        if df.empty:
+            return "-- %"
         return f"{df['renewable_share'].mean():.1f} %"
 
-    @output
-    @reactive.event(input.date_range)
+    @render.text
     def kpi_avg_demand():
         df = filtered_energy()
-        daily = df.groupby("date")["demand_mw"].sum() / 4 / 1000  # MWh zu GWh
+        if df.empty:
+            return "-- GWh"
+        daily = df.groupby("date")["demand_mw"].sum() / 4 / 1000
         return f"{daily.mean():.1f} GWh"
 
-    @output
-    @reactive.event(input.date_range)
+    @render.text
     def kpi_sunshine():
         df = filtered_sunshine()
-        daily = df.groupby("date")["sunshine_minutes_15min"].sum() / 60  # Minuten zu Stunden
+        if df.empty:
+            return "-- h"
+        daily = df.groupby("date")["sunshine_minutes_15min"].sum() / 60
         return f"{daily.mean():.1f} h"
 
     # Plot: Energiemix Pie Chart
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_energy_mix():
         df = filtered_energy()
+
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
 
         renewable_total = df["renewable_mw"].sum()
         conventional_total = df["conventional_mw"].sum()
@@ -305,11 +311,14 @@ def server(input, output, session):
         return fig
 
     # Plot: Aufschlüsselung nach Energiequelle
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_source_breakdown():
         df = filtered_energy()
+
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
 
         sources = {
             "Wind Onshore": df["wind_onshore_mw"].sum(),
@@ -322,14 +331,12 @@ def server(input, output, session):
             "Erdgas": df["fossil_gas_mw"].sum(),
         }
 
-        # Sortiere nach Wert
         sources = dict(sorted(sources.items(), key=lambda x: x[1], reverse=True))
-
         colors = ["#1ABC9C", "#16A085", "#F1C40F", "#5DADE2", "#27AE60", "#7F8C8D", "#95A5A6", "#E67E22"]
 
         fig = go.Figure(data=[go.Bar(
             x=list(sources.keys()),
-            y=[v / 1e6 for v in sources.values()],  # Umrechnung in TWh
+            y=[v / 1e6 for v in sources.values()],
             marker_color=colors,
             text=[f"{v/1e6:.1f}" for v in sources.values()],
             textposition="outside",
@@ -347,11 +354,14 @@ def server(input, output, session):
         return fig
 
     # Plot: Monatliche Entwicklung
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_monthly_trend():
         df = filtered_energy()
+
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
 
         monthly = df.groupby("month").agg({
             "renewable_mw": "sum",
@@ -359,7 +369,6 @@ def server(input, output, session):
             "demand_mw": "sum",
         }).reset_index()
 
-        # Umrechnung in GWh
         for col in ["renewable_mw", "conventional_mw", "demand_mw"]:
             monthly[col] = monthly[col] / 4 / 1000
 
@@ -404,13 +413,15 @@ def server(input, output, session):
         return fig
 
     # Plot: Zeitreihe Erzeugung/Verbrauch
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_timeseries():
         df = filtered_energy()
 
-        # Aggregiere auf Tagesbasis für bessere Übersicht
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
+
         daily = df.groupby("date").agg({
             "total_generation_mw": "mean",
             "demand_mw": "mean",
@@ -450,13 +461,15 @@ def server(input, output, session):
         return fig
 
     # Plot: Erneuerbare Zeitreihe
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_renewable_timeseries():
         df = filtered_energy()
 
-        # Aggregiere auf Tagesbasis
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
+
         daily = df.groupby("date").agg({
             "wind_onshore_mw": "mean",
             "wind_offshore_mw": "mean",
@@ -505,11 +518,14 @@ def server(input, output, session):
         return fig
 
     # Plot: Tagesprofil
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_daily_profile():
         df = filtered_energy()
+
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
 
         hourly = df.groupby("hour").agg({
             "demand_mw": "mean",
@@ -556,11 +572,14 @@ def server(input, output, session):
         return fig
 
     # Plot: Wochentag-Profil
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_weekday_profile():
         df = filtered_energy()
+
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
 
         weekday_names = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
@@ -587,14 +606,16 @@ def server(input, output, session):
         return fig
 
     # Plot: Solar-Korrelation
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_solar_correlation():
         df_e = filtered_energy()
         df_s = filtered_sunshine()
 
-        # Merge auf Timestamp
+        if df_e.empty or df_s.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
+
         merged = pd.merge(
             df_e[["timestamp", "photovoltaics_mw"]],
             df_s[["timestamp", "sunshine_minutes_15min"]],
@@ -602,7 +623,6 @@ def server(input, output, session):
             how="inner"
         )
 
-        # Aggregiere auf Stundenbasis
         merged["hour"] = pd.to_datetime(merged["timestamp"]).dt.hour
         hourly = merged.groupby("hour").agg({
             "photovoltaics_mw": "mean",
@@ -649,33 +669,34 @@ def server(input, output, session):
         return fig
 
     # Plot: Prognose
-    @output
     @render_widget
-    @reactive.event(input.dark_mode, input.date_range)
     def plot_forecast():
         df = filtered_energy()
 
-        # Täglicher Verbrauch
+        if df.empty:
+            fig = go.Figure()
+            fig.add_annotation(text="Keine Daten", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+            return fig
+
         daily = df.groupby("date").agg({
             "demand_mw": "sum",
         }).reset_index()
         daily["demand_gwh"] = daily["demand_mw"] / 4 / 1000
         daily["date"] = pd.to_datetime(daily["date"])
 
-        # Gleitender Durchschnitt (7 Tage)
         daily["ma7"] = daily["demand_gwh"].rolling(window=7).mean()
 
-        # Einfache Prognose: Fortschreibung des Trends
-        last_7_days = daily.tail(7)
-        trend = (last_7_days["demand_gwh"].iloc[-1] - last_7_days["demand_gwh"].iloc[0]) / 7
-
-        # Prognose für 7 Tage
-        forecast_dates = pd.date_range(start=daily["date"].max() + timedelta(days=1), periods=7)
-        forecast_values = [daily["ma7"].iloc[-1] + trend * (i+1) for i in range(7)]
+        if len(daily) >= 7:
+            last_7_days = daily.tail(7)
+            trend = (last_7_days["demand_gwh"].iloc[-1] - last_7_days["demand_gwh"].iloc[0]) / 7
+            forecast_dates = pd.date_range(start=daily["date"].max() + timedelta(days=1), periods=7)
+            forecast_values = [daily["ma7"].iloc[-1] + trend * (i+1) for i in range(7)]
+        else:
+            forecast_dates = []
+            forecast_values = []
 
         fig = go.Figure()
 
-        # Historische Daten
         fig.add_trace(go.Scatter(
             name="Täglicher Verbrauch",
             x=daily["date"],
@@ -693,15 +714,15 @@ def server(input, output, session):
             line=dict(color=COLORS["renewable"], width=3),
         ))
 
-        # Prognose
-        fig.add_trace(go.Scatter(
-            name="Prognose",
-            x=forecast_dates,
-            y=forecast_values,
-            mode="lines+markers",
-            line=dict(color="#E74C3C", width=3, dash="dash"),
-            marker=dict(size=10),
-        ))
+        if len(forecast_dates) > 0:
+            fig.add_trace(go.Scatter(
+                name="Prognose",
+                x=forecast_dates,
+                y=forecast_values,
+                mode="lines+markers",
+                line=dict(color="#E74C3C", width=3, dash="dash"),
+                marker=dict(size=10),
+            ))
 
         fig.update_layout(
             template=get_color_template(input.dark_mode()),
@@ -716,10 +737,12 @@ def server(input, output, session):
         return fig
 
     # Prognose-Metriken
-    @output
-    @reactive.event(input.date_range)
+    @render.ui
     def forecast_metrics():
         df = filtered_energy()
+
+        if df.empty:
+            return ui.div("Keine Daten verfügbar")
 
         daily = df.groupby("date").agg({
             "demand_mw": "sum",
@@ -728,7 +751,7 @@ def server(input, output, session):
 
         avg = daily["demand_gwh"].mean()
         std = daily["demand_gwh"].std()
-        trend = (daily["demand_gwh"].iloc[-1] - daily["demand_gwh"].iloc[0]) / len(daily)
+        trend = (daily["demand_gwh"].iloc[-1] - daily["demand_gwh"].iloc[0]) / len(daily) if len(daily) > 1 else 0
 
         return ui.div(
             ui.row(
