@@ -153,7 +153,7 @@ def create_custom_popup(country, total, dark_mode, color_theme):
 
     # Set title and template
     layout = go.Layout(
-        title=f"{total} Community Builders in {country}",
+        title=f"{total} Einträge in {country}",
         template=get_color_template(dark_mode),
         paper_bgcolor=get_background_color_plotly(dark_mode),
         title_x=0.5,
@@ -180,28 +180,28 @@ app_ui = ui.page_fillable(
             ui.row(
                 ui.layout_columns(
                     ui.value_box(
-                        title="N° Community Builders",
+                        title="Anzahl Einträge",
                         showcase=faicons.icon_svg(
                             "people-group", width="50px", fill="#FD9902 !important"
                         ),
                         value=len(read_data()),
                     ),
                     ui.value_box(
-                        title="N° Countries",
+                        title="Anzahl Länder",
                         showcase=faicons.icon_svg(
                             "globe", width="50px", fill="#FD9902 !important"
                         ),
                         value=len(read_data().country.unique()),
                     ),
                     ui.value_box(
-                        title="N° Categories",
+                        title="Anzahl Kategorien",
                         showcase=faicons.icon_svg(
                             "list", width="50px", fill="#FD9902 !important"
                         ),
                         value=len(read_data().category.unique()),
                     ),
                     ui.value_box(
-                        title="N° Cohorts",
+                        title="Anzahl Kohorten",
                         showcase=faicons.icon_svg(
                             "calendar", width="50px", fill="#FD9902 !important"
                         ),
@@ -259,10 +259,10 @@ app_ui = ui.page_fillable(
             open="closed",
         ),
         footer=ui.h6(
-            f"Made by Robert Garcia Ventura © {datetime.now().year}",
+            f"OSZ IMT Berlin © {datetime.now().year}",
             style="color: white !important; text-align: center;",
         ),
-        window_title="AWS Community Builders Dashboard",
+        window_title="Daten-Dashboard OSZ IMT",
     ),
     ui.tags.style(
         """
@@ -347,7 +347,7 @@ def server(input, output, session):
                 # Add a marker with the custom icon to the map
                 custom_icon = create_custom_icon(count)
 
-                # Create custom Pie chart with Community Builders from each country
+                # Create custom Pie chart with data from each country
                 custom_popup = create_custom_popup(
                     country, count, input.dark_mode(), input.color_theme()
                 )
@@ -396,14 +396,14 @@ def server(input, output, session):
         )
         df_countries = pd.concat([df_countries, df_other_countries])
 
-        # Plot 0: Bar Chart of Community Builders by Category
+        # Plot 0: Bar Chart of Einträge nach Kategorie
         fig0 = px.pie(
             df_countries,
             names="country",
             values="count",
             hole=0.3,
-            labels={"country": "Country", "count": "Number of Community Builders"},
-            title="Community Builders by Country",
+            labels={"country": "Country", "count": "Anzahl Einträge"},
+            title="Einträge nach Land",
             template=get_color_template(input.dark_mode()),
             color_discrete_sequence=get_color_theme(input.color_theme()),
         )
@@ -423,14 +423,14 @@ def server(input, output, session):
     @render_plotly_streaming()
     def plot_0():
 
-        # Plot 0: Bar Chart of Community Builders by Category
+        # Plot 0: Bar Chart of Einträge nach Kategorie
         fig0 = px.pie(
             df.groupby("region").size().reset_index(name="count"),
             names="region",
             values="count",
             hole=0.3,
-            labels={"region": "Region", "count": "Number of Community Builders"},
-            title="Community Builders by Region",
+            labels={"region": "Region", "count": "Anzahl Einträge"},
+            title="Einträge nach Region",
             template=get_color_template(input.dark_mode()),
             color_discrete_sequence=get_color_theme(input.color_theme()),
         )
@@ -455,8 +455,8 @@ def server(input, output, session):
             names="cohort",
             values="count",
             hole=0.3,
-            labels={"cohort": "Cohort", "count": "Number of Community Builders"},
-            title="Community Builders by Cohort",
+            labels={"cohort": "Cohort", "count": "Anzahl Einträge"},
+            title="Einträge nach Kohorte",
             template=get_color_template(input.dark_mode()),
             color_discrete_sequence=get_color_theme(input.color_theme()),
         )
@@ -487,8 +487,8 @@ def server(input, output, session):
             names="category",
             values="count",
             hole=0.3,
-            labels={"category": "Category", "count": "Number of Community Builders"},
-            title="Community Builders by Category",
+            labels={"category": "Category", "count": "Anzahl Einträge"},
+            title="Einträge nach Kategorie",
             template=get_color_template(input.dark_mode()),
             color_discrete_sequence=get_color_theme(
                 input.color_theme(), df_categories.category
@@ -533,10 +533,10 @@ def server(input, output, session):
             text_auto=True,
             labels={
                 "cohort": "Cohort",
-                "count": "Number of Community Builders",
+                "count": "Anzahl Einträge",
                 "category": "Category",
             },
-            title="N° Community Builders by Cohort and Category",
+            title="Einträge nach Kohorte und Kategorie",
             template=get_color_template(input.dark_mode()),
             color_discrete_sequence=get_color_theme(
                 input.color_theme(), df_counts.category
@@ -601,10 +601,10 @@ def server(input, output, session):
             text="count",
             labels={
                 "country": "Country",
-                "count": "Number of Community Builders",
+                "count": "Anzahl Einträge",
                 "cohort": "Cohort",
             },
-            title="Top 10 countries with more Community Builders by Cohort",
+            title="Top 10 Länder nach Kohorte",
             template=get_color_template(input.dark_mode()),
             color_discrete_sequence=(get_color_theme(input.color_theme())[:(len(df_top_10_countries.cohort.unique()))][::-1]),
             category_orders={

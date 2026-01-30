@@ -2,16 +2,16 @@
 
 **Dashboardgestützte Analyse und Prognose von Energiedaten**
 
-Ein interaktives Dashboard zur Visualisierung und Analyse von AWS Community Builders Daten, entwickelt als Schulprojekt am OSZ Informationstechnik und Medizintechnik (OSZ IMT).
+Ein interaktives Dashboard zur Visualisierung und Analyse von Daten, entwickelt als Schulprojekt am OSZ Informationstechnik und Medizintechnik (OSZ IMT).
 
 ## Projektübersicht
 
-Dieses Projekt verwendet Python Shiny und Plotly, um ein interaktives Dashboard zu erstellen, das statistische Auswertungen über das AWS Community Builders Programm visualisiert.
+Dieses Projekt verwendet Python Shiny und Plotly, um ein interaktives Dashboard zu erstellen, das statistische Auswertungen visualisiert.
 
 ### Funktionen
 
-- **Interaktive Weltkarte**: Visualisierung der Community Builders nach Ländern mit Popup-Diagrammen
-- **Statistische Übersicht**: Anzeige von Kennzahlen (Anzahl Community Builders, Länder, Kategorien, Kohorten)
+- **Interaktive Weltkarte**: Visualisierung von Datenpunkten nach Ländern mit Popup-Diagrammen
+- **Statistische Übersicht**: Anzeige von Kennzahlen (Anzahl Einträge, Länder, Kategorien, Kohorten)
 - **Datenvisualisierung**: Pie-Charts und Balkendiagramme nach:
   - Region
   - Kategorie
@@ -22,9 +22,9 @@ Dieses Projekt verwendet Python Shiny und Plotly, um ein interaktives Dashboard 
 
 ### Screenshots
 
-![Dashboard Übersicht](aws-community-builders-dashboard/docs/images/aws-cb-dashboard-mac-1.png)
+![Dashboard Übersicht](dashboard-app/docs/images/dashboard-1.png)
 
-![Detailansicht](aws-community-builders-dashboard/docs/images/aws-cb-dashboard-mac-2.png)
+![Detailansicht](dashboard-app/docs/images/dashboard-2.png)
 
 ## Technologie-Stack
 
@@ -50,10 +50,10 @@ venv\Scripts\activate  # Windows
 # source venv/bin/activate  # Linux/macOS
 
 # Abhängigkeiten installieren
-pip install -r aws-community-builders-dashboard/dashboard/requirements.txt
+pip install -r dashboard-app/dashboard/requirements.txt
 
 # Dashboard starten
-cd aws-community-builders-dashboard/dashboard
+cd dashboard-app/dashboard
 shiny run app.py
 ```
 
@@ -62,24 +62,23 @@ Das Dashboard ist dann unter `http://127.0.0.1:8000` erreichbar.
 ## Dokumentation
 
 - [Installationsanleitung](INSTALLATION.md) - Detaillierte Anweisungen zur Installation
-- [Mitwirken](aws-community-builders-dashboard/CONTRIBUTING.md) - Richtlinien für Beiträge
 
 ## Projektstruktur
 
 ```
 daten-dashboard-oszimt/
-├── README.md                              # Diese Datei
-├── INSTALLATION.md                        # Installationsanleitung
-├── LICENSE                                # MIT-Lizenz
-└── aws-community-builders-dashboard/      # Haupt-Dashboard-Anwendung
+├── README.md                    # Diese Datei
+├── INSTALLATION.md              # Installationsanleitung
+├── LICENSE                      # MIT-Lizenz
+└── dashboard-app/               # Haupt-Dashboard-Anwendung
     ├── dashboard/
-    │   ├── app.py                         # Hauptanwendung
-    │   ├── plotly_streaming.py            # Plotly-Hilfsfunktionen
-    │   ├── requirements.txt               # Python-Abhängigkeiten
-    │   ├── data/                          # CSV-Datendateien
-    │   └── static/                        # Statische Assets (Bilder)
-    ├── src/                               # Hilfsskripte
-    └── docs/                              # Dokumentation und Screenshots
+    │   ├── app.py               # Hauptanwendung
+    │   ├── plotly_streaming.py  # Plotly-Hilfsfunktionen
+    │   ├── requirements.txt     # Python-Abhängigkeiten
+    │   ├── data/                # CSV-Datendateien
+    │   └── static/              # Statische Assets (Bilder)
+    ├── src/                     # Hilfsskripte
+    └── docs/                    # Dokumentation und Screenshots
 ```
 
 ## Hinweise zur Nutzung
@@ -92,10 +91,6 @@ daten-dashboard-oszimt/
 ## Lizenz
 
 Dieses Projekt steht unter der MIT-Lizenz - siehe [LICENSE](LICENSE) für Details.
-
-## Danksagung
-
-Basierend auf dem [AWS Community Builders Dashboard](https://github.com/robertgv/aws-community-builders-dashboard) von Robert Garcia Ventura.
 
 ---
 

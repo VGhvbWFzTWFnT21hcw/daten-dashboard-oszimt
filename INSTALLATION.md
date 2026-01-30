@@ -75,7 +75,7 @@ Nach der Aktivierung sollte `(venv)` am Anfang der Kommandozeile erscheinen.
 ### Schritt 4: Abhängigkeiten installieren
 
 ```bash
-pip install -r aws-community-builders-dashboard/dashboard/requirements.txt
+pip install -r dashboard-app/dashboard/requirements.txt
 ```
 
 Dies installiert folgende Pakete:
@@ -90,7 +90,7 @@ Dies installiert folgende Pakete:
 ### Schritt 5: Anwendung starten
 
 ```bash
-cd aws-community-builders-dashboard/dashboard
+cd dashboard-app/dashboard
 shiny run app.py
 ```
 
