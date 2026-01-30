@@ -2,29 +2,46 @@
 
 **Dashboardgestützte Analyse und Prognose von Energiedaten**
 
-Ein interaktives Dashboard zur Visualisierung und Analyse von Daten, entwickelt als Schulprojekt am OSZ Informationstechnik und Medizintechnik (OSZ IMT).
+Ein interaktives Dashboard zur Visualisierung und Analyse von Energiedaten, entwickelt als Schulprojekt am OSZ Informationstechnik und Medizintechnik (OSZ IMT).
 
 ## Projektübersicht
 
-Dieses Projekt verwendet Python Shiny und Plotly, um ein interaktives Dashboard zu erstellen, das statistische Auswertungen visualisiert.
+Das Dashboard visualisiert Energiedaten (15-Minuten-Lastgänge) und Sonnenscheindaten über einen Zeitraum von 360 Tagen. Es ermöglicht:
 
-### Funktionen
+- Strukturierte Darstellung von Erzeugung und Verbrauch
+- Analyse des Energiemixes (erneuerbar vs. konventionell)
+- Korrelation zwischen Sonnenschein und PV-Erzeugung
+- Kurzfristige Verbrauchsprognose
 
-- **Interaktive Weltkarte**: Visualisierung von Datenpunkten nach Ländern mit Popup-Diagrammen
-- **Statistische Übersicht**: Anzeige von Kennzahlen (Anzahl Einträge, Länder, Kategorien, Kohorten)
-- **Datenvisualisierung**: Pie-Charts und Balkendiagramme nach:
-  - Region
-  - Kategorie
-  - Kohorte (Jahrgang)
-  - Top 10 Länder
-- **Dark/Light Mode**: Umschaltbare Farbthemen
-- **Anpassbare Farbpaletten**: Verschiedene Farbschemata für die Diagramme
+## Funktionen
 
-### Screenshots
+### Tab: Übersicht
+- **KPIs**: Durchschnittliche Erzeugung, erneuerbarer Anteil, Verbrauch, Sonnenstunden
+- **Energiemix-Diagramm**: Pie-Chart erneuerbar vs. konventionell
+- **Erzeugung nach Quelle**: Balkendiagramm aller Energieträger
+- **Monatliche Entwicklung**: Gestapeltes Balkendiagramm mit Verbrauchslinie
 
-![Dashboard Übersicht](dashboard-app/docs/images/dashboard-1.png)
+### Tab: Zeitreihen
+- **Erzeugung und Verbrauch**: Tägliche Entwicklung über den gesamten Zeitraum
+- **Erneuerbare Erzeugung**: Gestapelte Darstellung von Wind und Solar
 
-![Detailansicht](dashboard-app/docs/images/dashboard-2.png)
+### Tab: Tagesprofile
+- **Durchschnittliches Tagesprofil**: Verbrauch und Erzeugung nach Stunde
+- **Wochentag-Profil**: Verbrauch nach Wochentag
+- **PV-Sonnenschein-Korrelation**: Zusammenhang zwischen Sonnenschein und PV-Erzeugung
+
+### Tab: Prognose
+- **7-Tage Prognose**: Basierend auf gleitendem Durchschnitt
+- **Prognose-Kennzahlen**: Durchschnitt, Standardabweichung, Trend
+
+## Datenbasis
+
+| Datensatz | Beschreibung | Auflösung |
+|-----------|--------------|-----------|
+| Energiedaten | Erzeugung (Wind, Solar, Kohle, etc.) und Verbrauch | 15 Minuten |
+| Sonnenscheindauer | Minuten Sonnenschein pro Intervall | 15 Minuten |
+
+**Zeitraum**: 360 Tage (Januar - Dezember 2025)
 
 ## Technologie-Stack
 
@@ -34,8 +51,7 @@ Dieses Projekt verwendet Python Shiny und Plotly, um ein interaktives Dashboard 
 | Shiny | 0.10.1 | Web-Framework für interaktive Dashboards |
 | Plotly | 5.22.0 | Interaktive Diagramme |
 | Pandas | 2.2.2 | Datenverarbeitung |
-| ipyleaflet | 0.19.1 | Interaktive Karten |
-| faicons | 0.2.2 | Font Awesome Icons |
+| NumPy | - | Numerische Berechnungen |
 
 ## Schnellstart
 
@@ -70,23 +86,22 @@ daten-dashboard-oszimt/
 ├── README.md                    # Diese Datei
 ├── INSTALLATION.md              # Installationsanleitung
 ├── LICENSE                      # MIT-Lizenz
-└── dashboard-app/               # Haupt-Dashboard-Anwendung
-    ├── dashboard/
-    │   ├── app.py               # Hauptanwendung
-    │   ├── plotly_streaming.py  # Plotly-Hilfsfunktionen
-    │   ├── requirements.txt     # Python-Abhängigkeiten
-    │   ├── data/                # CSV-Datendateien
-    │   └── static/              # Statische Assets (Bilder)
-    ├── src/                     # Hilfsskripte
-    └── docs/                    # Dokumentation und Screenshots
+└── dashboard-app/               # Dashboard-Anwendung
+    └── dashboard/
+        ├── app.py               # Hauptanwendung
+        ├── requirements.txt     # Python-Abhängigkeiten
+        ├── data/
+        │   ├── energiedaten.csv     # Energiedaten (15-Min)
+        │   └── sonnenschein.csv     # Sonnenscheindaten
+        └── static/              # Statische Assets
 ```
 
-## Hinweise zur Nutzung
+## Features
 
-- Für die beste Darstellung wird ein großer Bildschirm empfohlen
-- Bei 80% Zoom erhält man eine gute Übersicht aller Grafiken
-- Die Karte lädt in Chrome schneller als in Safari
-- Beim ersten Start werden alle Dateien heruntergeladen
+- **Interaktive Filter**: Datumsbereich frei wählbar
+- **Dark/Light Mode**: Umschaltbares Farbschema
+- **Responsive Design**: Anpassung an verschiedene Bildschirmgrößen
+- **Vollbild-Modus**: Diagramme im Vollbild anzeigbar
 
 ## Lizenz
 

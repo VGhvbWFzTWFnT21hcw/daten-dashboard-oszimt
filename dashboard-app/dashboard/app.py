@@ -1,636 +1,757 @@
-from ipyleaflet import Marker, DivIcon, Map, basemaps, leaflet, Popup
 from shiny import App, reactive, ui
 from shinywidgets import output_widget, render_widget
 import pandas as pd
 import shiny.experimental as x
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly_streaming import render_plotly_streaming
+from plotly.subplots import make_subplots
 from pathlib import Path
 import faicons
-from datetime import datetime
+from datetime import datetime, timedelta
+import numpy as np
 
-category_colors = {
-    "Serverless": 0,
-    "Containers": 1,
-    "Dev Tools": 2,
-    "Security": 3,
-    "Cloud Operations": 4,
-    "Data": 5,
-    "Network C&D": 6,
-    "AI Engineering": 7,
-    "Machine Learning": 8,
+# Farbschema für Energietypen
+COLORS = {
+    "renewable": "#2ECC71",  # Grün für Erneuerbare
+    "conventional": "#E74C3C",  # Rot für Konventionelle
+    "demand": "#3498DB",  # Blau für Verbrauch
+    "solar": "#F1C40F",  # Gelb für Solar
+    "wind": "#1ABC9C",  # Türkis für Wind
+    "hydro": "#5DADE2",  # Hellblau für Wasser
+    "biomass": "#27AE60",  # Dunkelgrün für Biomasse
+    "coal": "#7F8C8D",  # Grau für Kohle
+    "gas": "#E67E22",  # Orange für Gas
+    "nuclear": "#9B59B6",  # Lila für Kernkraft
 }
 
-def read_data():
+RENEWABLE_COLS = [
+    "wind_onshore_mw", "wind_offshore_mw", "photovoltaics_mw",
+    "hydro_runofriver_mw", "biomass_mw", "other_renewables_mw"
+]
+
+CONVENTIONAL_COLS = [
+    "lignite_mw", "hard_coal_mw", "fossil_gas_mw",
+    "nuclear_mw", "other_conventional_mw", "pumped_storage_generation_mw"
+]
+
+
+def read_energy_data():
+    """Lade Energiedaten"""
     df = pd.read_csv(
-        Path(__file__).parent / "data/anonymized_cb_data_2025.csv", delimiter=";"
+        Path(__file__).parent / "data/energiedaten.csv"
     )
-    df["cohort"] = df["cohort"].astype(str)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["date"] = df["timestamp"].dt.date
+    df["hour"] = df["timestamp"].dt.hour
+    df["month"] = df["timestamp"].dt.month
+    df["weekday"] = df["timestamp"].dt.weekday
+
+    # Berechne erneuerbare und konventionelle Summen
+    df["renewable_mw"] = df[RENEWABLE_COLS].sum(axis=1)
+    df["conventional_mw"] = df[CONVENTIONAL_COLS].sum(axis=1)
+    df["renewable_share"] = (df["renewable_mw"] / df["total_generation_mw"] * 100).round(1)
+
     return df
 
 
-def get_color_theme(theme, list_categories=None):
-
-    if theme == "Custom":
-        list_colors = [
-            "#F6AA54",
-            "#2A5D78",
-            "#9FDEF1",
-            "#B9E52F",
-            "#E436BB",
-            "#6197E2",
-            "#863CFF",
-            "#30CB71",
-            "#ED90C7",
-            "#DE3B00",
-            "#25F1AA",
-            "#C2C4E3",
-            "#33AEB1",
-            "#8B5011",
-            "#A8577B",
-        ]
-    elif theme == "RdBu":
-        list_colors = px.colors.sequential.RdBu.copy()
-        del list_colors[5]  # Remove color position 5
-    elif theme == "GnBu":
-        list_colors = px.colors.sequential.GnBu
-    elif theme == "RdPu":
-        list_colors = px.colors.sequential.RdPu
-    elif theme == "Oranges":
-        list_colors = px.colors.sequential.Oranges
-    elif theme == "Blues":
-        list_colors = px.colors.sequential.Blues
-    elif theme == "Reds":
-        list_colors = px.colors.sequential.Reds
-    elif theme == "Hot":
-        list_colors = px.colors.sequential.Hot
-    elif theme == "Jet":
-        list_colors = px.colors.sequential.Jet
-    elif theme == "Rainbow":
-        list_colors = px.colors.sequential.Rainbow
-
-    if list_categories is not None:
-        final_list_colors = [
-            list_colors[category_colors[category] % len(list_colors)]
-            for category in list_categories
-        ]
-    else:
-        final_list_colors = list_colors
-
-    return final_list_colors
+def read_sunshine_data():
+    """Lade Sonnenscheindaten"""
+    df = pd.read_csv(
+        Path(__file__).parent / "data/sonnenschein.csv"
+    )
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["date"] = df["timestamp"].dt.date
+    df["hour"] = df["timestamp"].dt.hour
+    return df
 
 
 def get_color_template(mode):
-    if mode == "light":
-        return "plotly_white"
-    else:
-        return "plotly_dark"
+    return "plotly_white" if mode == "light" else "plotly_dark"
 
 
-def get_background_color_plotly(mode):
-    if mode == "light":
-        return "white"
-    else:
-        return "rgb(29, 32, 33)"
+def get_background_color(mode):
+    return "white" if mode == "light" else "rgb(29, 32, 33)"
 
 
-def get_map_theme(mode):
-    print(mode)
-    if mode == "light":
-        return basemaps.CartoDB.Positron
-    else:
-        return basemaps.CartoDB.DarkMatter
-
-
-def create_custom_icon(count):
-
-    size_circle = 45 + (count / 10)
-
-    # Define the HTML code for the icon
-    html_code = f"""
-    <div style=".leaflet-div-icon.background:transparent !important;
-        position:relative; width: {size_circle}px; height: {size_circle}px;">
-        <svg width="{size_circle}" height="{size_circle}" viewBox="0 0 42 42"
-            class="donut" aria-labelledby="donut-title donut-desc" role="img">
-            <circle class="donut-hole" cx="21" cy="21" r="15.91549430918954"
-                fill="white" role="presentation"></circle>
-            <circle class="donut-ring" cx="21" cy="21" r="15.91549430918954"
-                fill="transparent" stroke="color(display-p3 0.9451 0.6196 0.2196)"
-                stroke-width="3" role="presentation"></circle>
-            <text x="50%" y="60%" text-anchor="middle" font-size="13"
-                font-weight="bold" fill="#000">{count}</text>
-        </svg>
-    </div>
-    """
-
-    # Create a custom DivIcon
-    return DivIcon(
-        icon_size=(50, 50), icon_anchor=(25, 25), html=html_code, class_name="dummy"
-    )
-
-
-def create_custom_popup(country, total, dark_mode, color_theme):
-
-    # Group by 'region' and count occurrences of each region
-    df = read_data()
-    category_counts = (
-        df[df.country == country].groupby("category").size().reset_index(name="count")
-    )
-
-    # Create a pie chart using plotly.graph_objects
-    data = [
-        go.Pie(
-            labels=category_counts["category"],
-            values=category_counts["count"],
-            hole=0.3,
-            textinfo="percent+label",
-            marker=dict(
-                colors=get_color_theme(color_theme, category_counts["category"])
-            ),
-        )
-    ]
-
-    # Set title and template
-    layout = go.Layout(
-        title=f"{total} Einträge in {country}",
-        template=get_color_template(dark_mode),
-        paper_bgcolor=get_background_color_plotly(dark_mode),
-        title_x=0.5,
-        titlefont=dict(size=20),
-        showlegend=False,
-    )
-
-    figure = go.Figure(data=data, layout=layout)
-    figure.update_traces(
-        textposition="outside", textinfo="percent+label", textfont=dict(size=15)
-    )
-    figure.layout.width = 600
-    figure.layout.height = 400
-
-    popup = Popup(child=go.FigureWidget(figure), max_width=600, max_height=400)
-
-    return popup
-
-
+# UI Definition
 app_ui = ui.page_fillable(
     ui.page_navbar(
+        # Tab 1: Übersicht
         ui.nav_panel(
-            "Dashboard",
+            "Übersicht",
             ui.row(
                 ui.layout_columns(
                     ui.value_box(
-                        title="Anzahl Einträge",
-                        showcase=faicons.icon_svg(
-                            "people-group", width="50px", fill="#FD9902 !important"
-                        ),
-                        value=len(read_data()),
+                        title="Ø Tägliche Erzeugung",
+                        showcase=faicons.icon_svg("bolt", width="50px"),
+                        value=ui.output_text("kpi_avg_generation"),
                     ),
                     ui.value_box(
-                        title="Anzahl Länder",
-                        showcase=faicons.icon_svg(
-                            "globe", width="50px", fill="#FD9902 !important"
-                        ),
-                        value=len(read_data().country.unique()),
+                        title="Ø Erneuerbarer Anteil",
+                        showcase=faicons.icon_svg("leaf", width="50px"),
+                        value=ui.output_text("kpi_renewable_share"),
                     ),
                     ui.value_box(
-                        title="Anzahl Kategorien",
-                        showcase=faicons.icon_svg(
-                            "list", width="50px", fill="#FD9902 !important"
-                        ),
-                        value=len(read_data().category.unique()),
+                        title="Ø Täglicher Verbrauch",
+                        showcase=faicons.icon_svg("plug", width="50px"),
+                        value=ui.output_text("kpi_avg_demand"),
                     ),
                     ui.value_box(
-                        title="Anzahl Kohorten",
-                        showcase=faicons.icon_svg(
-                            "calendar", width="50px", fill="#FD9902 !important"
-                        ),
-                        value=len(read_data().cohort.unique()),
+                        title="Ø Sonnenstunden/Tag",
+                        showcase=faicons.icon_svg("sun", width="50px"),
+                        value=ui.output_text("kpi_sunshine"),
                     ),
                     col_widths=(3, 3, 3, 3),
                 ),
             ),
             ui.row(
                 ui.layout_columns(
-                    x.ui.card(output_widget("plot_0")),
-                    x.ui.card(output_widget("plot_1")),
-                    x.ui.card(output_widget("plot_2")),
-                    col_widths=(4, 4, 4),
+                    x.ui.card(
+                        ui.card_header("Energiemix - Erneuerbar vs. Konventionell"),
+                        output_widget("plot_energy_mix"),
+                    ),
+                    x.ui.card(
+                        ui.card_header("Erzeugung nach Energiequelle"),
+                        output_widget("plot_source_breakdown"),
+                    ),
+                    col_widths=(5, 7),
                 ),
             ),
             ui.row(
                 ui.layout_columns(
-                    x.ui.card(output_widget("plot_3")),
-                    x.ui.card(output_widget("plot_4")),
+                    x.ui.card(
+                        ui.card_header("Monatliche Entwicklung"),
+                        output_widget("plot_monthly_trend"),
+                    ),
+                    col_widths=(12,),
+                ),
+            ),
+        ),
+        # Tab 2: Zeitreihen
+        ui.nav_panel(
+            "Zeitreihen",
+            ui.row(
+                ui.layout_columns(
+                    x.ui.card(
+                        ui.card_header("Erzeugung und Verbrauch im Zeitverlauf"),
+                        output_widget("plot_timeseries"),
+                        full_screen=True,
+                    ),
+                    col_widths=(12,),
+                ),
+            ),
+            ui.row(
+                ui.layout_columns(
+                    x.ui.card(
+                        ui.card_header("Erneuerbare Erzeugung nach Typ"),
+                        output_widget("plot_renewable_timeseries"),
+                        full_screen=True,
+                    ),
+                    col_widths=(12,),
+                ),
+            ),
+        ),
+        # Tab 3: Tagesprofile
+        ui.nav_panel(
+            "Tagesprofile",
+            ui.row(
+                ui.layout_columns(
+                    x.ui.card(
+                        ui.card_header("Durchschnittliches Tagesprofil"),
+                        output_widget("plot_daily_profile"),
+                    ),
+                    x.ui.card(
+                        ui.card_header("Tagesprofil nach Wochentag"),
+                        output_widget("plot_weekday_profile"),
+                    ),
                     col_widths=(6, 6),
                 ),
             ),
-        ),
-        ui.nav_panel(
-            "Map",
             ui.row(
-                ui.card(
-                    output_widget("map_full"),
-                    id="card_map",
+                ui.layout_columns(
+                    x.ui.card(
+                        ui.card_header("PV-Erzeugung vs. Sonnenschein"),
+                        output_widget("plot_solar_correlation"),
+                    ),
+                    col_widths=(12,),
                 ),
             ),
         ),
-        title=ui.img(src="images/logo.png", style="max-width:100px;width:100%"),
+        # Tab 4: Prognose
+        ui.nav_panel(
+            "Prognose",
+            ui.row(
+                ui.layout_columns(
+                    x.ui.card(
+                        ui.card_header("7-Tage Verbrauchsprognose (gleitender Durchschnitt)"),
+                        output_widget("plot_forecast"),
+                        full_screen=True,
+                    ),
+                    col_widths=(12,),
+                ),
+            ),
+            ui.row(
+                ui.layout_columns(
+                    x.ui.card(
+                        ui.card_header("Prognose-Kennzahlen"),
+                        ui.output_ui("forecast_metrics"),
+                    ),
+                    col_widths=(12,),
+                ),
+            ),
+        ),
+        title=ui.span("Energie-Dashboard", style="font-weight: bold; color: #2ECC71;"),
         id="page",
         sidebar=ui.sidebar(
-            ui.input_select(
-                id="color_theme",
-                label="Color theme",
-                choices=[
-                    "Custom",
-                    "RdBu",
-                    "GnBu",
-                    "RdPu",
-                    "Oranges",
-                    "Blues",
-                    "Reds",
-                    "Hot",
-                    "Jet",
-                    "Rainbow",
-                ],
-                selected="Custom",
+            ui.input_date_range(
+                id="date_range",
+                label="Zeitraum auswählen",
+                start="2025-01-01",
+                end="2025-12-26",
+                language="de",
             ),
             ui.input_dark_mode(id="dark_mode", mode="light"),
             open="closed",
         ),
         footer=ui.h6(
-            f"OSZ IMT Berlin © {datetime.now().year}",
+            f"OSZ IMT Berlin - Energiedaten Dashboard © {datetime.now().year}",
             style="color: white !important; text-align: center;",
         ),
-        window_title="Daten-Dashboard OSZ IMT",
+        window_title="Energie-Dashboard OSZ IMT",
     ),
     ui.tags.style(
         """
-        .leaflet-popup-content {
-            width: 600px !important;
-        }
-        .leaflet-div-icon {
-            background: transparent !important;
-            border: transparent !important;
-        }
-        .collapse-toggle {
-            color: #FD9902 !important;
-        }
-        .main {
-            /* Background image */
-            background-image: url("images/background_dark_full.png");
-            height: 100%;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-size: cover;
-        }
-        div#map_full.html-fill-container {
-            height: -webkit-fill-available !important;
-            min-height: 850px !important;
-            max-height: 2000px !important;
-        }
-        div#main_panel.html-fill-container {
-            height: -webkit-fill-available !important;
-        }
+        .value-box .value-box-value { font-size: 1.8rem; }
+        .card-header { font-weight: bold; }
         """
     ),
-    icon="images/favicon.ico",
 )
 
 
 def server(input, output, session):
 
-    df = read_data()
-
-    # Read countries metadata (GPS coordinates only)
-    df_countries_metadata = pd.read_csv(
-        Path(__file__).parent / "data/countries.csv", delimiter=";"
-    )
-    
-    # Calculate country counts from CB data
-    df_country_counts = (
-        df.groupby("country")
-        .size()
-        .reset_index(name="count")
-    )
-    
-    # Merge GPS coordinates with calculated counts
-    df_countries = df_countries_metadata.merge(
-        df_country_counts, 
-        on="country", 
-        how="inner"  # Only include countries that have CB members
-    )
+    # Lade Daten
+    df_energy_full = read_energy_data()
+    df_sunshine_full = read_sunshine_data()
 
     @reactive.Calc
+    def filtered_energy():
+        """Filtere Daten nach Datumsbereich"""
+        start, end = input.date_range()
+        mask = (df_energy_full["date"] >= start) & (df_energy_full["date"] <= end)
+        return df_energy_full[mask]
+
+    @reactive.Calc
+    def filtered_sunshine():
+        """Filtere Sonnenscheindaten nach Datumsbereich"""
+        start, end = input.date_range()
+        mask = (df_sunshine_full["date"] >= start) & (df_sunshine_full["date"] <= end)
+        return df_sunshine_full[mask]
+
+    # KPIs
+    @output
+    @reactive.event(input.date_range)
+    def kpi_avg_generation():
+        df = filtered_energy()
+        daily = df.groupby("date")["total_generation_mw"].sum() / 4 / 1000  # MWh zu GWh
+        return f"{daily.mean():.1f} GWh"
+
+    @output
+    @reactive.event(input.date_range)
+    def kpi_renewable_share():
+        df = filtered_energy()
+        return f"{df['renewable_share'].mean():.1f} %"
+
+    @output
+    @reactive.event(input.date_range)
+    def kpi_avg_demand():
+        df = filtered_energy()
+        daily = df.groupby("date")["demand_mw"].sum() / 4 / 1000  # MWh zu GWh
+        return f"{daily.mean():.1f} GWh"
+
+    @output
+    @reactive.event(input.date_range)
+    def kpi_sunshine():
+        df = filtered_sunshine()
+        daily = df.groupby("date")["sunshine_minutes_15min"].sum() / 60  # Minuten zu Stunden
+        return f"{daily.mean():.1f} h"
+
+    # Plot: Energiemix Pie Chart
     @output
     @render_widget
-    @reactive.event(input.dark_mode)
-    def map_full():
-        map = Map(
-            basemap=get_map_theme(input.dark_mode()),
-            center=(25.00, 20.00),
-            zoom=3,
-            scroll_wheel_zoom=True,
-        )
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_energy_mix():
+        df = filtered_energy()
 
-        with ui.Progress(min=0, max=len(df_countries)) as progress:
-            progress.set(
-                message="Calculation in progress", detail="This may take a while..."
-            )
+        renewable_total = df["renewable_mw"].sum()
+        conventional_total = df["conventional_mw"].sum()
 
-            for index, row in df_countries.iterrows():
-                lat = float(row["latitud"])
-                lon = float(row["longitud"])
-                country = row["country"]
-                count = row["count"]
+        fig = go.Figure(data=[go.Pie(
+            labels=["Erneuerbar", "Konventionell"],
+            values=[renewable_total, conventional_total],
+            hole=0.4,
+            marker_colors=[COLORS["renewable"], COLORS["conventional"]],
+            textinfo="percent+label",
+            textfont_size=14,
+        )])
 
-                # Add a marker with the custom icon to the map
-                custom_icon = create_custom_icon(count)
-
-                # Create custom Pie chart with data from each country
-                custom_popup = create_custom_popup(
-                    country, count, input.dark_mode(), input.color_theme()
-                )
-
-                marker = Marker(
-                    location=(lat, lon),
-                    icon=custom_icon,
-                    draggable=False,
-                    popup=custom_popup,
-                )
-
-                map.add_layer(marker)
-
-                progress.set(index, message=f"Calculating country {country}")
-
-            map.add_control(leaflet.ScaleControl(position="bottomleft"))
-
-            progress.set(index, message="Rendering the map...")
-
-        return map
-
-    @reactive.Calc
-    @output
-    @render_plotly_streaming()
-    def plot_tmp():
-
-        df_countries = (
-            df.groupby("country")
-            .size()
-            .reset_index(name="count")
-            .sort_values("count", ascending=False)[:10]
-        )
-
-        df_other_countries = pd.DataFrame(
-            [
-                [
-                    "Others",
-                    df.groupby("country")
-                    .size()
-                    .reset_index(name="count")
-                    .sort_values("count", ascending=False)[10:]["count"]
-                    .sum(),
-                ]
-            ],
-            columns=["country", "count"],
-        )
-        df_countries = pd.concat([df_countries, df_other_countries])
-
-        # Plot 0: Bar Chart of Einträge nach Kategorie
-        fig0 = px.pie(
-            df_countries,
-            names="country",
-            values="count",
-            hole=0.3,
-            labels={"country": "Country", "count": "Anzahl Einträge"},
-            title="Einträge nach Land",
+        fig.update_layout(
             template=get_color_template(input.dark_mode()),
-            color_discrete_sequence=get_color_theme(input.color_theme()),
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            showlegend=False,
+            margin=dict(t=20, b=20, l=20, r=20),
         )
 
-        fig0.update_layout(
-            paper_bgcolor=get_background_color_plotly(input.dark_mode()), title_x=0.5
-        )
-        fig0.update_traces(
-            textposition="outside", textinfo="percent+label", textfont=dict(size=15)
-        )
-        fig0.update_layout(showlegend=False)
+        return fig
 
-        return fig0
-
-    @reactive.Calc
+    # Plot: Aufschlüsselung nach Energiequelle
     @output
-    @render_plotly_streaming()
-    def plot_0():
+    @render_widget
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_source_breakdown():
+        df = filtered_energy()
 
-        # Plot 0: Bar Chart of Einträge nach Kategorie
-        fig0 = px.pie(
-            df.groupby("region").size().reset_index(name="count"),
-            names="region",
-            values="count",
-            hole=0.3,
-            labels={"region": "Region", "count": "Anzahl Einträge"},
-            title="Einträge nach Region",
-            template=get_color_template(input.dark_mode()),
-            color_discrete_sequence=get_color_theme(input.color_theme()),
-        )
-
-        fig0.update_layout(
-            paper_bgcolor=get_background_color_plotly(input.dark_mode()), title_x=0.5
-        )
-        fig0.update_traces(
-            textposition="outside", textinfo="percent+label", textfont=dict(size=15)
-        )
-        fig0.update_layout(showlegend=False)
-
-        return fig0
-
-    @reactive.Calc
-    @output
-    @render_plotly_streaming()
-    def plot_2():
-
-        fig1 = px.pie(
-            df.groupby("cohort").size().reset_index(name="count"),
-            names="cohort",
-            values="count",
-            hole=0.3,
-            labels={"cohort": "Cohort", "count": "Anzahl Einträge"},
-            title="Einträge nach Kohorte",
-            template=get_color_template(input.dark_mode()),
-            color_discrete_sequence=get_color_theme(input.color_theme()),
-        )
-
-        fig1.update_layout(
-            paper_bgcolor=get_background_color_plotly(input.dark_mode()), title_x=0.5
-        )
-        fig1.update_traces(
-            textposition="outside", textinfo="percent+label", textfont=dict(size=15)
-        )
-        fig1.update_layout(showlegend=False)
-
-        return fig1
-
-    @reactive.Calc
-    @output
-    @render_plotly_streaming()
-    def plot_1():
-
-        df_categories = (
-            df.groupby("category")
-            .size()
-            .reset_index(name="count")
-            .sort_values("count", ascending=False)
-        )
-        fig2 = px.pie(
-            df_categories,
-            names="category",
-            values="count",
-            hole=0.3,
-            labels={"category": "Category", "count": "Anzahl Einträge"},
-            title="Einträge nach Kategorie",
-            template=get_color_template(input.dark_mode()),
-            color_discrete_sequence=get_color_theme(
-                input.color_theme(), df_categories.category
-            ),
-        )
-
-        fig2.update_layout(
-            paper_bgcolor=get_background_color_plotly(input.dark_mode()), title_x=0.5
-        )
-        fig2.update_traces(
-            textposition="outside", textinfo="percent+label", textfont=dict(size=15)
-        )
-        fig2.update_layout(showlegend=False)
-
-        return fig2
-
-    @reactive.Calc
-    @output
-    @render_plotly_streaming()
-    def plot_4():
-
-        df_counts = (
-            df[["cohort", "category"]]
-            .value_counts()
-            .reset_index(name="count")
-            .sort_values(by=["cohort", "category"])
-        )
-        total_cohort = (
-            df[["cohort"]]
-            .value_counts()
-            .reset_index(name="count")
-            .sort_values(by="cohort")
-        )
-
-        # Create the bar plot
-        fig3 = px.bar(
-            df_counts,
-            x="cohort",
-            y="count",
-            color="category",
-            text="count",
-            text_auto=True,
-            labels={
-                "cohort": "Cohort",
-                "count": "Anzahl Einträge",
-                "category": "Category",
-            },
-            title="Einträge nach Kohorte und Kategorie",
-            template=get_color_template(input.dark_mode()),
-            color_discrete_sequence=get_color_theme(
-                input.color_theme(), df_counts.category
-            ),
-            category_orders={
-                "cohort": ["2020 beta", "2020", "2021", "2022", "2023", "2024"]
-            },
-        )
-
-        fig3.update_traces(textposition="inside")
-
-        fig3.add_trace(
-            go.Scatter(
-                x=total_cohort["cohort"],
-                y=total_cohort["count"],
-                text=total_cohort["count"],
-                mode="text",
-                textposition="top center",
-                textfont=dict(
-                    size=15,
-                ),
-                showlegend=False,
-            )
-        )
-
-        fig3.update_layout(
-            paper_bgcolor=get_background_color_plotly(input.dark_mode()), title_x=0.5
-        )
-        fig3.update_layout(uniformtext_minsize=8, uniformtext_mode="hide")
-        fig3.update_yaxes(range=[0, max(total_cohort["count"]) + 100])
-        return fig3
-
-    @reactive.Calc
-    @output
-    @render_plotly_streaming()
-    def plot_3():
-
-        top_10_countries = (
-            df.groupby(["country"])
-            .size()
-            .reset_index(name="count")
-            .sort_values("count", ascending=False)[:10]
-        )
-        list_top_10_countries = top_10_countries["country"].values
-        country_index = {
-            country: index for index, country in enumerate(list_top_10_countries)
+        sources = {
+            "Wind Onshore": df["wind_onshore_mw"].sum(),
+            "Wind Offshore": df["wind_offshore_mw"].sum(),
+            "Photovoltaik": df["photovoltaics_mw"].sum(),
+            "Wasserkraft": df["hydro_runofriver_mw"].sum(),
+            "Biomasse": df["biomass_mw"].sum(),
+            "Braunkohle": df["lignite_mw"].sum(),
+            "Steinkohle": df["hard_coal_mw"].sum(),
+            "Erdgas": df["fossil_gas_mw"].sum(),
         }
-        df["country_index"] = df["country"].map(country_index)
-        df_top_10_countries = (
-            df[[row in list_top_10_countries for row in df.country]]
-            .groupby(["country", "country_index", "cohort"])
-            .size()
-            .reset_index(name="count")
-            .sort_values("country_index")
-        )
 
-        fig4 = px.bar(
-            df_top_10_countries,
-            x="country",
-            y="count",
-            color="cohort",
-            text="count",
-            labels={
-                "country": "Country",
-                "count": "Anzahl Einträge",
-                "cohort": "Cohort",
-            },
-            title="Top 10 Länder nach Kohorte",
+        # Sortiere nach Wert
+        sources = dict(sorted(sources.items(), key=lambda x: x[1], reverse=True))
+
+        colors = ["#1ABC9C", "#16A085", "#F1C40F", "#5DADE2", "#27AE60", "#7F8C8D", "#95A5A6", "#E67E22"]
+
+        fig = go.Figure(data=[go.Bar(
+            x=list(sources.keys()),
+            y=[v / 1e6 for v in sources.values()],  # Umrechnung in TWh
+            marker_color=colors,
+            text=[f"{v/1e6:.1f}" for v in sources.values()],
+            textposition="outside",
+        )])
+
+        fig.update_layout(
             template=get_color_template(input.dark_mode()),
-            color_discrete_sequence=(get_color_theme(input.color_theme())[:(len(df_top_10_countries.cohort.unique()))][::-1]),
-            category_orders={
-                "cohort": ["2024", "2023", "2022", "2021", "2020", "2020 beta"]
-            },
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            yaxis_title="Erzeugung (TWh)",
+            xaxis_tickangle=-45,
+            margin=dict(t=20, b=100, l=60, r=20),
+            showlegend=False,
         )
-        fig4.update_traces(textposition="inside")
 
-        fig4.add_trace(
+        return fig
+
+    # Plot: Monatliche Entwicklung
+    @output
+    @render_widget
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_monthly_trend():
+        df = filtered_energy()
+
+        monthly = df.groupby("month").agg({
+            "renewable_mw": "sum",
+            "conventional_mw": "sum",
+            "demand_mw": "sum",
+        }).reset_index()
+
+        # Umrechnung in GWh
+        for col in ["renewable_mw", "conventional_mw", "demand_mw"]:
+            monthly[col] = monthly[col] / 4 / 1000
+
+        month_names = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
+                       "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"]
+        monthly["month_name"] = monthly["month"].apply(lambda x: month_names[x-1])
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Bar(
+            name="Erneuerbar",
+            x=monthly["month_name"],
+            y=monthly["renewable_mw"],
+            marker_color=COLORS["renewable"],
+        ))
+
+        fig.add_trace(go.Bar(
+            name="Konventionell",
+            x=monthly["month_name"],
+            y=monthly["conventional_mw"],
+            marker_color=COLORS["conventional"],
+        ))
+
+        fig.add_trace(go.Scatter(
+            name="Verbrauch",
+            x=monthly["month_name"],
+            y=monthly["demand_mw"],
+            mode="lines+markers",
+            line=dict(color=COLORS["demand"], width=3),
+            marker=dict(size=8),
+        ))
+
+        fig.update_layout(
+            template=get_color_template(input.dark_mode()),
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            barmode="stack",
+            yaxis_title="Energie (GWh)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=40, b=40, l=60, r=20),
+        )
+
+        return fig
+
+    # Plot: Zeitreihe Erzeugung/Verbrauch
+    @output
+    @render_widget
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_timeseries():
+        df = filtered_energy()
+
+        # Aggregiere auf Tagesbasis für bessere Übersicht
+        daily = df.groupby("date").agg({
+            "total_generation_mw": "mean",
+            "demand_mw": "mean",
+            "renewable_mw": "mean",
+        }).reset_index()
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            name="Gesamterzeugung",
+            x=daily["date"],
+            y=daily["total_generation_mw"] / 1000,
+            mode="lines",
+            line=dict(color=COLORS["renewable"], width=1),
+            fill="tozeroy",
+            fillcolor="rgba(46, 204, 113, 0.3)",
+        ))
+
+        fig.add_trace(go.Scatter(
+            name="Verbrauch",
+            x=daily["date"],
+            y=daily["demand_mw"] / 1000,
+            mode="lines",
+            line=dict(color=COLORS["demand"], width=2),
+        ))
+
+        fig.update_layout(
+            template=get_color_template(input.dark_mode()),
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            yaxis_title="Leistung (GW)",
+            xaxis_title="Datum",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=40, b=40, l=60, r=20),
+            hovermode="x unified",
+        )
+
+        return fig
+
+    # Plot: Erneuerbare Zeitreihe
+    @output
+    @render_widget
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_renewable_timeseries():
+        df = filtered_energy()
+
+        # Aggregiere auf Tagesbasis
+        daily = df.groupby("date").agg({
+            "wind_onshore_mw": "mean",
+            "wind_offshore_mw": "mean",
+            "photovoltaics_mw": "mean",
+        }).reset_index()
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            name="Wind Onshore",
+            x=daily["date"],
+            y=daily["wind_onshore_mw"] / 1000,
+            mode="lines",
+            stackgroup="one",
+            line=dict(color="#1ABC9C"),
+        ))
+
+        fig.add_trace(go.Scatter(
+            name="Wind Offshore",
+            x=daily["date"],
+            y=daily["wind_offshore_mw"] / 1000,
+            mode="lines",
+            stackgroup="one",
+            line=dict(color="#16A085"),
+        ))
+
+        fig.add_trace(go.Scatter(
+            name="Photovoltaik",
+            x=daily["date"],
+            y=daily["photovoltaics_mw"] / 1000,
+            mode="lines",
+            stackgroup="one",
+            line=dict(color=COLORS["solar"]),
+        ))
+
+        fig.update_layout(
+            template=get_color_template(input.dark_mode()),
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            yaxis_title="Leistung (GW)",
+            xaxis_title="Datum",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=40, b=40, l=60, r=20),
+            hovermode="x unified",
+        )
+
+        return fig
+
+    # Plot: Tagesprofil
+    @output
+    @render_widget
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_daily_profile():
+        df = filtered_energy()
+
+        hourly = df.groupby("hour").agg({
+            "demand_mw": "mean",
+            "renewable_mw": "mean",
+            "photovoltaics_mw": "mean",
+        }).reset_index()
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            name="Verbrauch",
+            x=hourly["hour"],
+            y=hourly["demand_mw"] / 1000,
+            mode="lines+markers",
+            line=dict(color=COLORS["demand"], width=3),
+        ))
+
+        fig.add_trace(go.Scatter(
+            name="Erneuerbare",
+            x=hourly["hour"],
+            y=hourly["renewable_mw"] / 1000,
+            mode="lines+markers",
+            line=dict(color=COLORS["renewable"], width=3),
+        ))
+
+        fig.add_trace(go.Scatter(
+            name="Photovoltaik",
+            x=hourly["hour"],
+            y=hourly["photovoltaics_mw"] / 1000,
+            mode="lines+markers",
+            line=dict(color=COLORS["solar"], width=2, dash="dash"),
+        ))
+
+        fig.update_layout(
+            template=get_color_template(input.dark_mode()),
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            yaxis_title="Leistung (GW)",
+            xaxis_title="Stunde",
+            xaxis=dict(tickmode="linear", tick0=0, dtick=2),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=40, b=40, l=60, r=20),
+        )
+
+        return fig
+
+    # Plot: Wochentag-Profil
+    @output
+    @render_widget
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_weekday_profile():
+        df = filtered_energy()
+
+        weekday_names = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+        weekday = df.groupby("weekday").agg({
+            "demand_mw": "mean",
+        }).reset_index()
+        weekday["weekday_name"] = weekday["weekday"].apply(lambda x: weekday_names[x])
+
+        fig = go.Figure(data=[go.Bar(
+            x=weekday["weekday_name"],
+            y=weekday["demand_mw"] / 1000,
+            marker_color=COLORS["demand"],
+            text=[f"{v/1000:.1f}" for v in weekday["demand_mw"]],
+            textposition="outside",
+        )])
+
+        fig.update_layout(
+            template=get_color_template(input.dark_mode()),
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            yaxis_title="Ø Verbrauch (GW)",
+            margin=dict(t=20, b=40, l=60, r=20),
+        )
+
+        return fig
+
+    # Plot: Solar-Korrelation
+    @output
+    @render_widget
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_solar_correlation():
+        df_e = filtered_energy()
+        df_s = filtered_sunshine()
+
+        # Merge auf Timestamp
+        merged = pd.merge(
+            df_e[["timestamp", "photovoltaics_mw"]],
+            df_s[["timestamp", "sunshine_minutes_15min"]],
+            on="timestamp",
+            how="inner"
+        )
+
+        # Aggregiere auf Stundenbasis
+        merged["hour"] = pd.to_datetime(merged["timestamp"]).dt.hour
+        hourly = merged.groupby("hour").agg({
+            "photovoltaics_mw": "mean",
+            "sunshine_minutes_15min": "mean",
+        }).reset_index()
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        fig.add_trace(
+            go.Bar(
+                name="PV-Erzeugung",
+                x=hourly["hour"],
+                y=hourly["photovoltaics_mw"] / 1000,
+                marker_color=COLORS["solar"],
+                opacity=0.7,
+            ),
+            secondary_y=False,
+        )
+
+        fig.add_trace(
             go.Scatter(
-                x=top_10_countries["country"],
-                y=top_10_countries["count"],
-                text=top_10_countries["count"],
-                mode="text",
-                textposition="top center",
-                textfont=dict(size=15),
-                showlegend=False,
-            )
+                name="Sonnenschein",
+                x=hourly["hour"],
+                y=hourly["sunshine_minutes_15min"],
+                mode="lines+markers",
+                line=dict(color="#E74C3C", width=3),
+                marker=dict(size=8),
+            ),
+            secondary_y=True,
         )
 
-        fig4.update_layout(
-            paper_bgcolor=get_background_color_plotly(input.dark_mode()), title_x=0.5
+        fig.update_layout(
+            template=get_color_template(input.dark_mode()),
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            xaxis_title="Stunde",
+            xaxis=dict(tickmode="linear", tick0=0, dtick=2),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=40, b=40, l=60, r=60),
         )
-        fig4.update_layout(uniformtext_minsize=8, uniformtext_mode="hide")
-        fig4.update_yaxes(range=[0, max(top_10_countries["count"]) + 40])
-        return fig4
+
+        fig.update_yaxes(title_text="PV-Erzeugung (GW)", secondary_y=False)
+        fig.update_yaxes(title_text="Sonnenschein (min/15min)", secondary_y=True)
+
+        return fig
+
+    # Plot: Prognose
+    @output
+    @render_widget
+    @reactive.event(input.dark_mode, input.date_range)
+    def plot_forecast():
+        df = filtered_energy()
+
+        # Täglicher Verbrauch
+        daily = df.groupby("date").agg({
+            "demand_mw": "sum",
+        }).reset_index()
+        daily["demand_gwh"] = daily["demand_mw"] / 4 / 1000
+        daily["date"] = pd.to_datetime(daily["date"])
+
+        # Gleitender Durchschnitt (7 Tage)
+        daily["ma7"] = daily["demand_gwh"].rolling(window=7).mean()
+
+        # Einfache Prognose: Fortschreibung des Trends
+        last_7_days = daily.tail(7)
+        trend = (last_7_days["demand_gwh"].iloc[-1] - last_7_days["demand_gwh"].iloc[0]) / 7
+
+        # Prognose für 7 Tage
+        forecast_dates = pd.date_range(start=daily["date"].max() + timedelta(days=1), periods=7)
+        forecast_values = [daily["ma7"].iloc[-1] + trend * (i+1) for i in range(7)]
+
+        fig = go.Figure()
+
+        # Historische Daten
+        fig.add_trace(go.Scatter(
+            name="Täglicher Verbrauch",
+            x=daily["date"],
+            y=daily["demand_gwh"],
+            mode="lines",
+            line=dict(color=COLORS["demand"], width=1),
+            opacity=0.5,
+        ))
+
+        fig.add_trace(go.Scatter(
+            name="7-Tage Durchschnitt",
+            x=daily["date"],
+            y=daily["ma7"],
+            mode="lines",
+            line=dict(color=COLORS["renewable"], width=3),
+        ))
+
+        # Prognose
+        fig.add_trace(go.Scatter(
+            name="Prognose",
+            x=forecast_dates,
+            y=forecast_values,
+            mode="lines+markers",
+            line=dict(color="#E74C3C", width=3, dash="dash"),
+            marker=dict(size=10),
+        ))
+
+        fig.update_layout(
+            template=get_color_template(input.dark_mode()),
+            paper_bgcolor=get_background_color(input.dark_mode()),
+            yaxis_title="Verbrauch (GWh/Tag)",
+            xaxis_title="Datum",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=40, b=40, l=60, r=20),
+            hovermode="x unified",
+        )
+
+        return fig
+
+    # Prognose-Metriken
+    @output
+    @reactive.event(input.date_range)
+    def forecast_metrics():
+        df = filtered_energy()
+
+        daily = df.groupby("date").agg({
+            "demand_mw": "sum",
+        }).reset_index()
+        daily["demand_gwh"] = daily["demand_mw"] / 4 / 1000
+
+        avg = daily["demand_gwh"].mean()
+        std = daily["demand_gwh"].std()
+        trend = (daily["demand_gwh"].iloc[-1] - daily["demand_gwh"].iloc[0]) / len(daily)
+
+        return ui.div(
+            ui.row(
+                ui.layout_columns(
+                    ui.value_box(
+                        title="Ø Tagesverbrauch",
+                        value=f"{avg:.1f} GWh",
+                        showcase=faicons.icon_svg("chart-line", width="30px"),
+                    ),
+                    ui.value_box(
+                        title="Standardabweichung",
+                        value=f"± {std:.1f} GWh",
+                        showcase=faicons.icon_svg("arrows-left-right", width="30px"),
+                    ),
+                    ui.value_box(
+                        title="Trend",
+                        value=f"{'+' if trend > 0 else ''}{trend:.2f} GWh/Tag",
+                        showcase=faicons.icon_svg("arrow-trend-up" if trend > 0 else "arrow-trend-down", width="30px"),
+                    ),
+                    col_widths=(4, 4, 4),
+                ),
+            ),
+        )
 
 
 static_dir = Path(__file__).parent / "static"
