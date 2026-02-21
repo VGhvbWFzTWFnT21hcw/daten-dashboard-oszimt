@@ -14,6 +14,7 @@ SELECT DISTINCT
     extract('year' FROM timestamp)::SMALLINT AS year,
     extract('month' FROM timestamp)::TINYINT AS month,
     extract('day' FROM timestamp)::TINYINT AS day,
-    extract('hour' FROM timestamp)::TINYINT AS hour
+    extract('hour' FROM timestamp)::TINYINT AS hour,
+    ((extract('isodow' FROM timestamp)::TINYINT) - 1) AS weekday
 
 FROM cleaned_sunshine;

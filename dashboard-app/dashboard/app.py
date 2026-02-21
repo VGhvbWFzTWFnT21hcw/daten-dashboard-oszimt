@@ -2,13 +2,12 @@ from shiny import App, reactive, ui, render
 from shinywidgets import output_widget, render_widget
 import pandas as pd
 import shiny.experimental as x
-import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pathlib import Path
 import faicons
-from datetime import datetime, timedelta, date
-import numpy as np
+from datetime import datetime, timedelta
+import duckdb
 
 # Farbschema für Energietypen
 COLORS = {
@@ -36,31 +35,55 @@ CONVENTIONAL_COLS = [
 
 
 def read_energy_data():
-    """Lade Energiedaten"""
-    df = pd.read_csv(
-        Path(__file__).parent / "data/energiedaten.csv"
-    )
+    """Lade Energiedaten aus DuckDB durch Join von Usage, Generation und Time"""
+    con = duckdb.connect("duckdb/energy_data.duckdb")
+
+    # SQL query to join the three tables on the timestamp
+    query = """
+    SELECT 
+        g.*, 
+        u.total_generation_mw,
+        u.pumped_storage_generation_mw,
+        u.demand_mw,
+        u.curtailment_or_exports_mw,
+        u.unserved_or_imports_mw,
+        t.full_timestamp,
+        t.hour,
+        t.month,
+        t.day,
+        t.weekday
+    FROM fact_generation g
+    LEFT JOIN fact_usage u ON g.timestamp = u.timestamp
+    LEFT JOIN dim_time t   ON g.timestamp = t.full_timestamp
+    """
+
+    # Execute and convert to DataFrame
+    df = con.execute(query).df()
+
+    # Ensure timestamp and date are datetime objects
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
     df["date"] = df["timestamp"].dt.date
-    df["hour"] = df["timestamp"].dt.hour
-    df["month"] = df["timestamp"].dt.month
-    df["weekday"] = df["timestamp"].dt.weekday
 
-    df["renewable_mw"] = df[RENEWABLE_COLS].sum(axis=1)
-    df["conventional_mw"] = df[CONVENTIONAL_COLS].sum(axis=1)
-    df["renewable_share"] = (df["renewable_mw"] / df["total_generation_mw"] * 100).round(1)
-
+    con.close()
     return df
 
 
 def read_sunshine_data():
-    """Lade Sonnenscheindaten"""
-    df = pd.read_csv(
-        Path(__file__).parent / "data/sonnenschein.csv"
-    )
+    """Lade Sonnenscheindaten aus DuckDB"""
+    # Connect to the persistent database
+    con = duckdb.connect("duckdb/energy_data.duckdb")
+
+    # Query the table and convert directly to a DataFrame
+    df = con.execute("SELECT * FROM fact_sunshine").df()
+
+    # Ensure timestamp is datetime (DuckDB timestamps usually map automatically)
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+
+    # Extract date and hour
     df["date"] = df["timestamp"].dt.date
     df["hour"] = df["timestamp"].dt.hour
+
+    con.close()
     return df
 
 
@@ -247,6 +270,9 @@ def server(input, output, session):
         mask = (df_sunshine_full["date"] >= start) & (df_sunshine_full["date"] <= end)
         return df_sunshine_full[mask]
 
+
+
+
     # KPIs mit @render.text
     @render.text
     def kpi_avg_generation():
@@ -428,6 +454,8 @@ def server(input, output, session):
             "renewable_mw": "mean",
         }).reset_index()
 
+        daily["date"] = daily["date"].astype(str)
+
         fig = go.Figure()
 
         fig.add_trace(go.Scatter(
@@ -475,6 +503,8 @@ def server(input, output, session):
             "wind_offshore_mw": "mean",
             "photovoltaics_mw": "mean",
         }).reset_index()
+
+        daily["date"] = daily["date"].astype(str)
 
         fig = go.Figure()
 
