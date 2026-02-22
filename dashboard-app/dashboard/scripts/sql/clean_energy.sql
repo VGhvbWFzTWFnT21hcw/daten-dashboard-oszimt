@@ -4,8 +4,10 @@
 DROP TABLE IF EXISTS cleaned_energy;
 
 -- Create the dimension table from cleaned_sunshine
-CREATE TABLE cleaned_energy AS 
+CREATE VIEW cleaned_energy AS 
 SELECT 
+    -- add ID column for faster joins
+    ROW_NUMBER() OVER (ORDER BY timestamp) AS id_energy,
     -- original timestamp in string format
     -- convert to timestamp format and correct timezone
     -- 2025-01-01 00:00:00+0100
