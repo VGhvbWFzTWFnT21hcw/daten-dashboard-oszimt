@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS dim_time;
 -- Create the dimension table from cleaned_sunshine
 CREATE TABLE dim_time AS 
 SELECT DISTINCT 
+    ROW_NUMBER() OVER (ORDER BY timestamp) AS id_time,
     -- The original timestamp info
     timestamp AS full_timestamp,
 

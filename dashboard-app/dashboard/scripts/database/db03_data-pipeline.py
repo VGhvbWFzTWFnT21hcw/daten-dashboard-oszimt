@@ -20,9 +20,7 @@ scripts = {
     "clean_sunshine": read_sql_file("dashboard-app/dashboard/scripts/sql/clean_sunshine.sql"),
     "dim_time": read_sql_file("dashboard-app/dashboard/scripts/sql/dim_time.sql"),
     "dim_weather": read_sql_file("dashboard-app/dashboard/scripts/sql/dim_weather.sql"),
-    "fact_generation": read_sql_file("dashboard-app/dashboard/scripts/sql/fact_generation.sql"),
-    #"fact_usage": read_sql_file("dashboard-app/dashboard/scripts/sql/fact_usage.sql"),
-    #"fact_sunshine": read_sql_file("dashboard-app/dashboard/scripts/sql/fact_sunshine.sql")
+    "fact_generation": read_sql_file("dashboard-app/dashboard/scripts/sql/fact_generation.sql")
 }
 
 # Execute the queries

@@ -47,18 +47,6 @@ def server(input, output, session):
         max=df_energy_full["date"].max()
     )
 
-    # @reactive.Calc
-    # def filtered_energy():
-    #     start, end = input.date_range()
-    #     mask = (df_energy_full["date"] >= start) & (df_energy_full["date"] <= end)
-    #     return df_energy_full[mask]
-
-    # @reactive.Calc
-    # def filtered_sunshine():
-    #     start, end = input.date_range()
-    #     mask = (df_sunshine_full["date"] >= start) & (df_sunshine_full["date"] <= end)
-    #     return df_sunshine_full[mask]
-
     @reactive.Calc
     def filtered_energy():
         df = df_energy_full.copy()

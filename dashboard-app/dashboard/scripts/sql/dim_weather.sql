@@ -5,7 +5,7 @@ DROP TABLE IF EXISTS dim_weather;
 
 -- Create the dimension table from cleaned_sunshine
 CREATE TABLE dim_weather (
-    weather_key INT PRIMARY KEY,
+    id_weather INT PRIMARY KEY,
     condition_name VARCHAR(50) NOT NULL, -- Lesbarer Name
     min_sunshine_min DECIMAL(4,2),       -- Untergrenze in Minuten
     max_sunshine_min DECIMAL(4,2),       -- Obergrenze in Minuten
@@ -13,7 +13,7 @@ CREATE TABLE dim_weather (
     description TEXT                     -- Optionale Details
 );
 
-INSERT INTO dim_weather (weather_key, condition_name, min_sunshine_min, max_sunshine_min, is_sunny_threshold, description)
+INSERT INTO dim_weather (id_weather, condition_name, min_sunshine_min, max_sunshine_min, is_sunny_threshold, description)
 VALUES 
     (1, 'Schatten', 0.00, 2.00, FALSE, 'Weniger als 2 Min. Sonne pro Intervall'),
     (2, 'Wolkig', 2.01, 7.50, FALSE, 'Zwischen 2 und 7,5 Min. Sonne'),

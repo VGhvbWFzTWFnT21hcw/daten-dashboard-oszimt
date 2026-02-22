@@ -20,13 +20,7 @@ WITH calculated_sums AS (
         nuclear_mw + 
         other_conventional_mw) AS conventional_mw
     FROM cleaned_energy
-)
--- SELECT
---     COALESCE(cs.timestamp, sun.start_time) AS start_time,
---     *,
---     -- Calculate share: (Renewable / Total) * 100 rounded to 1 decimal
---     ROUND((renewable_mw / NULLIF(total_generation_mw, 0)) * 100, 1) AS renewable_share
--- FROM calculated_sums;
+),
 
 SELECT 
     COALESCE(ce.id_energy, sun.id_sun) AS id,
