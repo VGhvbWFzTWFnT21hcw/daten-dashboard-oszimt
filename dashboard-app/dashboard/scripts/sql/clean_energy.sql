@@ -1,7 +1,7 @@
 -- clean_energy.sql
 
 -- Drop the table if it already exists to allow for re-runs
-DROP TABLE IF EXISTS cleaned_energy;
+DROP VIEW IF EXISTS cleaned_energy;
 
 -- Create the dimension table from cleaned_sunshine
 CREATE VIEW cleaned_energy AS 

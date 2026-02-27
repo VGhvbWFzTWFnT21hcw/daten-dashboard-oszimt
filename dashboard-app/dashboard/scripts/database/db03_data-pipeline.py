@@ -1,6 +1,6 @@
 import duckdb
 
-# Connect to your database
+# Connect your database
 con = duckdb.connect("duckdb/energy_data.duckdb")
 
 # Install and load the icu extension
@@ -33,5 +33,7 @@ print("--- Tables Created ---")
 print(con.execute("SELECT * FROM fact_generation LIMIT 5").df())
 print(con.execute("SELECT * FROM dim_time LIMIT 5").df()) 
 print(con.execute("SELECT * FROM dim_weather LIMIT 5").df()) 
+
 # Close the connection
 con.close()
+

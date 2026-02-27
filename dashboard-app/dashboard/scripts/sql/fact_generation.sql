@@ -27,7 +27,6 @@ SELECT
     ce.*,
     sun.id_sun,
     sun.sunshine_minutes_15min,
-    -- Calculate share: (Renewable / Total) * 100 rounded to 1 decimal
     ROUND((ce.renewable_mw / NULLIF(ce.total_generation_mw, 0)) * 100, 1) AS renewable_share
 FROM calculated_sums ce
 FULL OUTER JOIN cleaned_sunshine sun ON ce.id_energy = sun.id_sun;
