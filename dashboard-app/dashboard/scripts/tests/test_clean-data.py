@@ -19,7 +19,7 @@ duplicates = t1.aggregate("timestamp, count(*) AS n", "timestamp") \
                .filter("n > 1") \
                .df()  # .df() is equivalent to collect()
 
-# Check D: Freshness
+# Check B: Freshness
 freshness = table1_cleaned.aggregate("max(timestamp) AS latest_entry").df()
 
 # 4. Output Results
@@ -30,7 +30,7 @@ print(f"Latest record timestamp: {freshness['latest_entry'][0]}")
 # 5. Save Cleaned Data
 # Equivalent to compute(name = "cleaned_sunshine", temporary = False)
 # This creates a persistent table from the transformation pipeline
-con.execute("DROP TABLE IF EXISTS cleaned_sunshine")
+con.execute("DROP VIEW IF EXISTS cleaned_sunshine")
 table1_cleaned.create("cleaned_sunshine")
 
 # Close connection

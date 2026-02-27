@@ -8,3 +8,5 @@ con = duckdb.connect(database=':memory:')
 result = con.execute("SELECT 'DuckDB is ready!'").fetchone()
 print(result[0])
 
+# Close the connection
+con.close()
